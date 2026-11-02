@@ -255,7 +255,7 @@ function renderEchelonnement(newTotal, old){
   const row = (a, b) => `<tr><td>${a}</td><td>${eur(r2(b))}</td></tr>`;
   const pc = x => Math.round(x * 100) + " %";
   const intro = gap > 0
-    ? `<p class="hint" style="margin-top:0">La hausse est étalée en deux étapes, chacune au 1er juillet, pour éviter un saut brutal :</p>
+    ? `<p class="hint" style="margin-top:0">La hausse est étalée en deux étapes, chacune au 1er juillet :</p>
        <table class="detail">
          <tr><td>Avant le 1er juillet 2027</td><td>${eur(r2(o))}/an (ancien tarif)</td></tr>
          <tr><td>À partir du 1er juillet 2027</td><td>${eur(r2(p1))}/an (${pc(f[0])} de la hausse)</td></tr>
