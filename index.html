@@ -64,7 +64,8 @@
     </div>
     <div class="field hidden" id="f-marchand">
       <label class="check"><input type="checkbox" id="marchand">
-        <span>Usage lié à de l'hébergement marchand (majoration de 25 %)</span></label>
+        <span>Location occasionnelle du bateau (hébergement marchand) : majoration de 25 %</span></label>
+      <div class="hint">Pour un bateau qui sert aussi à son propriétaire. Un bateau dédié à la location relève de l'usage professionnel.</div>
     </div>
   </section>
 
@@ -91,6 +92,11 @@
     <h2>Comparatif avec l'ancienne tarification</h2>
     <div id="cmp"></div>
   </section>
+
+  <section class="card hidden" id="c-ech" aria-live="polite">
+    <h2>Échelonnement – activités économiques</h2>
+    <div id="ech"></div>
+  </section>
 </main>
 
 <script>
@@ -104,6 +110,7 @@ const TARIFS = {
   plaisance: {
     label: "Plaisance privée",
     secteurLabel: "Ponton",
+    marchand: true,
     secteurs: {
       savatteA:     { label: "Ponton A Savatte", p1: 40, p2: 30 },
       savatteB:     { label: "Ponton B Savatte", p1: 47, p2: 30 },
@@ -112,7 +119,7 @@ const TARIFS = {
     }
   },
   habitation: {
-    label: "Bateau à usage d'habitation (location inclus)",
+    label: "Bateau à usage d'habitation",
     secteurLabel: "Secteur",
     marchand: true,
     secteurs: {
@@ -121,7 +128,7 @@ const TARIFS = {
     }
   },
   pro: {
-    label: "Bateau à usage professionnel",
+    label: "Bateau à usage professionnel (dont bateaux dédiés à la location)",
     secteurLabel: "Type d'unité",
     secteurs: {
       navigant: { label: "Unité navigant régulièrement", p1: 50, p2: 20 },
@@ -130,6 +137,14 @@ const TARIFS = {
   }
 };
 const MAJ_MARCHAND = 0.25;
+
+/* ===== Échelonnement (activités économiques uniquement) =====
+   Part de l'écart (nouveau – ancien) appliquée à chaque palier.
+   Palier 1 : du 01/07/2027 au 30/06/2028 ; palier 2 : à partir du 01/07/2028 (tarif plein) ;
+   année civile complète au nouveau tarif : 2029.
+   En cas de baisse, le nouveau tarif s'applique dès le 01/07/2027. */
+const ECH_HAUSSE = [0.5, 1];
+const ECH_BAISSE = [1, 1];
 
 /* ===== Ancienne tarification (€ TTC) – délibération du conseil municipal du 29/03/2021 ===== */
 const ANCIEN = {
@@ -160,8 +175,7 @@ function fillSecteurs(){
   $("l-secteur").textContent = u.secteurLabel;
   sel.innerHTML = '<option value="">— Choisir —</option>' +
     Object.entries(u.secteurs).map(([k,v]) => `<option value="${k}">${v.label}</option>`).join("");
-  $("f-marchand").classList.toggle("hidden", !u.marchand);
-  if(!u.marchand) $("marchand").checked = false;
+    if(!u.marchand) $("marchand").checked = false;
 }
 
 /* Calcule ce que le bateau payait avant. Renvoie { total, lines, notes } ou { na: "raison" } */
@@ -231,14 +245,42 @@ function renderComparatif(newTotal, old){
     `<table class="detail">${old.lines.map(l => `<tr><td>${l[0]}</td><td>${eur(r2(l[1]))}</td></tr>`).join("")}</table>`;
 }
 
+function renderEchelonnement(newTotal, old){
+  const card = $("c-ech"), el = $("ech");
+  if(old.na){ card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const o = old.total, gap = newTotal - o;
+  const f = gap > 0 ? ECH_HAUSSE : ECH_BAISSE;
+  const p1 = o + f[0] * gap, p2 = o + f[1] * gap;
+  const row = (a, b) => `<tr><td>${a}</td><td>${eur(r2(b))}</td></tr>`;
+  const pc = x => Math.round(x * 100) + " %";
+  const intro = gap > 0
+    ? `<p class="hint" style="margin-top:0">La hausse est étalée en deux étapes, chacune au 1er juillet, pour éviter un saut brutal :</p>
+       <table class="detail">
+         <tr><td>Avant le 1er juillet 2027</td><td>${eur(r2(o))}/an (ancien tarif)</td></tr>
+         <tr><td>À partir du 1er juillet 2027</td><td>${eur(r2(p1))}/an (${pc(f[0])} de la hausse)</td></tr>
+         <tr><td>À partir du 1er juillet 2028</td><td>${eur(r2(p2))}/an (nouveau tarif)</td></tr>
+       </table>
+       <p class="hint">Comme les hausses ont lieu en milieu d'année, chaque année civile mélange deux niveaux de tarif. 2029 est la première année entièrement au nouveau tarif. Montant facturé :</p>`
+    : `<p class="hint" style="margin-top:0">Le nouveau tarif est inférieur à l'ancien : il s'applique en totalité dès le 1er juillet 2027. Montant facturé :</p>`;
+  el.innerHTML = intro + "<table>" +
+    row("2027 (hausse au 1er juillet)", (o + p1) / 2) +
+    row("2028 (hausse au 1er juillet)", (p1 + p2) / 2) +
+    row("2029 (tarif plein, année complète)", p2) +
+    "</table>";
+}
+
 function calcul(){
   const usage = $("usage").value, secteur = $("secteur").value;
+  const marchand = $("marchand").checked;
   const u = TARIFS[usage];
   const s = u && u.secteurs[secteur];
   const out = $("out");
   const showDim = !(s && s.forfait);
   $("c-dim").classList.toggle("hidden", !showDim);
+  $("f-marchand").classList.toggle("hidden", !u || !u.marchand || !showDim);
   $("c-comp").classList.add("hidden");
+  $("c-ech").classList.add("hidden");
 
   if(!u || !s){ out.innerHTML = '<p class="empty">Renseignez les informations ci-dessus.</p>'; return; }
 
@@ -266,7 +308,7 @@ function calcul(){
       rows.push(["Surface de 50 m² ou moins : part variable nulle", eur(0)]);
     }
 
-    if(u.marchand && $("marchand").checked){
+    if(u.marchand && marchand){
       const maj = total * MAJ_MARCHAND;
       rows.push(["Majoration hébergement marchand (+25 %)", eur(maj)]);
       total += maj;
@@ -277,7 +319,11 @@ function calcul(){
     `<div class="total">${eur(total)} <small>TTC / an</small></div>` +
     "<table>" + rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("") + "</table>";
 
-  renderComparatif(total, ancienTarif(usage, secteur, L, $("marchand").checked));
+  const old = ancienTarif(usage, secteur, L, marchand);
+  renderComparatif(total, old);
+
+  // Activité économique = usage professionnel (dont bateaux dédiés à la location)
+  if(usage === "pro") renderEchelonnement(total, old);
 }
 
 fillUsage(); fillSecteurs(); calcul();
